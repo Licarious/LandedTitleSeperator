@@ -76,15 +76,24 @@ def read_files(input_path = "_Input/landed_titles") -> list:
     return files
 
 #read all lines in a file and returns a list of lines from the file
-def read_lines(file) -> list:
-    with open("_Input/landed_titles/" + file, encoding="utf-8-sig") as f:
+def read_lines(file, input_path = "_Input/landed_titles/") -> list:
+    with open(input_path + file, encoding="utf-8-sig") as f:
         return f.readlines()
 
 #clean line by adding a space on ether side of { } = and removing double spaces and spliting on # and returning a trimed first element
 def clean_line(line) -> str:
     return line.replace("{", " { ").replace("}", " } ").replace("=", " = ").replace("  ", " ").split("#")[0].replace("\ufeff", "").strip()
 
-def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editOnly = False):
+def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editOnly = False, overwriteSimilar = True, restrictedLines = ["province", "capital"]):
+    """
+    lines: list of lines from a landed_titles file
+    landed_titles: dictionary of all landed titles
+    atScores: list to store all @score normaly found at the top of a landed_titles file
+    editOnly: if True will only edit values from the landed_titles file without adding new holdings to the landed_titles dictionary
+    overwriteSimilar: if True will overwrite values in mergeMulti list if the same key is found in both
+    restrictedLines: list of keys that will not be updated if they are set and the holding is found again
+    """
+    
     title_starts = ["e_", "k_", "d_", "c_", "b_"]
     
     indentation = 0
@@ -99,13 +108,9 @@ def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editO
     #stack for tracking parrent holding
     holdingStack = []
     
-    #lines that are restricted form updating when editing
-    restrictedLines = ["province", "capital"]
-
     #multilines that are to be merged when editing
     mergeMulti = ["male_names", "female_names", "cultural_names"]
     mergingMultiEmpty = False
-    overwriteSimilar = True
     
     for line in lines:
         cl = clean_line(line)
@@ -117,7 +122,7 @@ def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editO
                 atScores.append(cl)
                 
         #create landed title and manage holdings
-        if cl.startswith(tuple(title_starts)):            
+        if cl.startswith(tuple(title_starts)):
             tmpName = cl.split("=")[0].strip()
             
             #create a new landedtitle and add it to landed_titles dictionary
@@ -209,7 +214,8 @@ def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editO
                                 break
                     elif overwriteSimilar:
                         currentHolding.dictonaryValues[multiLineTuple][lineNumber] = line
-                    
+        
+        #track indintation level
         if "{" in cl or "}" in cl:
             #split line into on space
             split = cl.split()
@@ -259,10 +265,10 @@ def write_holding(h: LandedTitle, f):
             break
     f.write(whitespace + "}\n")
 
-def write_landed_titles2(landed_titles: dict, atScores: list):
+def write_landed_titles2(landed_titles: dict, atScores: list, output_path = "_Output/landed_titles/"):
    #if _Output folder does not exits create it
-    if not os.path.exists("_Output"):
-        os.makedirs("_Output")
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
     titularTitles = []
     
     for currentLandedTitle in landed_titles:
@@ -274,14 +280,14 @@ def write_landed_titles2(landed_titles: dict, atScores: list):
                 continue
             else:
                 #write each landedTitle to a file
-                with open("_Output/01_" + currentLandedTitle + ".txt", "w", encoding="utf-8-sig") as f:
+                with open(output_path+"01_" + currentLandedTitle + ".txt", "w", encoding="utf-8-sig") as f:
                     #write all the atScores 
                     for atScore in atScores:
                         f.write(atScore+"\n")
                     write_holding(landed_titles[currentLandedTitle], f)
                     f.close()
     #write titularTitles to a file
-    with open("_Output/00_landed_titles.txt", "w", encoding="utf-8-sig") as f:
+    with open(output_path+"00_landed_titles.txt", "w", encoding="utf-8-sig") as f:
         #write all the atScores 
         for atScore in atScores:
             f.write(atScore+"\n")
@@ -297,9 +303,9 @@ def main():
     #dictionary landed_titles whoes key is a string and value is a landedTitle
     landed_titles = {}
     atScores = []
-
+    
     #file name restriciton list for preventing adding new holdings from those files
-    file_name_restriction = ["MoreCulturalNames"]
+    file_name_restriction = []#["MoreCulturalNames"]
     
     for file in files:
         parse_landed_titles3(read_lines(file), landed_titles, atScores, any(name in file for name in file_name_restriction))
