@@ -90,7 +90,7 @@ def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editO
     landed_titles: dictionary of all landed titles
     atScores: list to store all @score normaly found at the top of a landed_titles file
     editOnly: if True will only edit values from the landed_titles file without adding new holdings to the landed_titles dictionary
-    overwriteSimilar: if True will overwrite values in mergeMulti list if the same key is found in both
+    overwriteSimilar: if True will overwrite values in mergeMulti list when merging if the same key is found in both
     restrictedLines: list of keys that will not be updated if they are set and the holding is found again
     """
     
@@ -226,14 +226,23 @@ def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editO
                 #if } is in subtract 1 from indentation
                 if "}" in s:
                     indentation -= 1
-                    #manage holding stack
-                    if indentation <= holdingDepth and len(holdingStack) > 0:
-                        holdingStack.pop()
                     #turn off current multi line holding tracking
                     if indentation <= multiLineIndentStart:
                         multiLineTuple = None
                         multiLineIndentStart = -1
                         mergingMultiEmpty = False
+                    #manage holding stack
+                    elif indentation <= holdingDepth:
+                        if len(holdingStack) > 0:
+                            holdingStack.pop()
+                        if len(holdingStack) > 0:
+                            #set currentHolding to last element in stack
+                            currentHolding = holdingStack[-1]
+                            holdingDepth = indentation
+                        else:
+                            currentHolding = None
+                            holdingDepth = indentation
+                    
                     
                     
            
@@ -251,10 +260,10 @@ def write_holding(h: LandedTitle, f):
             for line in h.dictonaryValues[key]:
                 f.write(line)
             f.write("\n")
-    #recursivly write each holding
+    #recursivly write each subholding
     for holding in h.holdings:
         write_holding(holding, f)
-    #find the whitespace infornt of h.dictonaryValues["nameLine"]
+    #find the whitespace infornt of h.dictonaryValues["nameLine"] for properly placing ending }
     whitespace = ""
     for char in h.dictonaryValues["nameLine"]:
         if char == " ":
