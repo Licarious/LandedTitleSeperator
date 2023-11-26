@@ -2,6 +2,10 @@ import os
 
 #LandedTitle class for storing all relevent info about a holding
 class LandedTitle:
+    #line check lists
+    singleLineCheckList = ["ruler_uses_title_name", "no_automatic_claims", "landless", "destroy_if_invalid_heir", "destroy_on_succession", "delete_on_destroy", "delete_on_gain_same_tier", "definite_form", "always_follows_primary_heir", "can_be_named_after_dynasty", "province", "capital", "de_jure_drift_disabled", "ignore_titularity_for_title_weighting"]
+    multiLineCheckList = ["color", "male_names", "female_names", "ai_primary_priority", "can_create", "can_create_on_partition", "cultural_names"]
+    
     def __init__(self, nameLine):
         self.name = nameLine.split("=")[0].strip()
         
@@ -10,7 +14,7 @@ class LandedTitle:
         self.dictonaryValues = {
             "nameLine": nameLine,
             "province": None,
-            "color": None,
+            "color": [],
             "definite_form": None,
             "ruler_uses_title_name": None,
             "landless": None,
@@ -35,10 +39,6 @@ class LandedTitle:
             "can_create_on_partition": []
             
         }
-
-        #line check lists
-        self.singleLineCheckList = ["ruler_uses_title_name", "no_automatic_claims", "color", "landless", "destroy_if_invalid_heir", "destroy_on_succession", "delete_on_destroy", "delete_on_gain_same_tier", "definite_form", "always_follows_primary_heir", "can_be_named_after_dynasty", "province", "capital", "de_jure_drift_disabled", "ignore_titularity_for_title_weighting"]
-        self.multiLineCheckList = ["male_names", "female_names", "ai_primary_priority", "can_create", "can_create_on_partition", "cultural_names"]
         
         self.holdings = []
         self.parent = None
@@ -82,7 +82,7 @@ def read_lines(file, input_path = "_Input/landed_titles/") -> list:
 
 #clean line by adding a space on ether side of { } = and removing double spaces and spliting on # and returning a trimed first element
 def clean_line(line) -> str:
-    return line.replace("{", " { ").replace("}", " } ").replace("=", " = ").replace("  ", " ").split("#")[0].replace("\ufeff", "").strip()
+    return line.replace("{", " { ").replace("}", " } ").replace("=", " = ").replace("  ", " ").split("#")[0].strip()
 
 def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editOnly = False, overwriteSimilar = True, restrictedLines = ["province", "capital"]):
     """
@@ -117,9 +117,9 @@ def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editO
 
         #atScores
         if cl.startswith("@"):
-            #make sure that cl is not alredy in atscores
-            if cl not in atScores:
-                atScores.append(cl)
+            #if any element in atcores contains the first part of cl is not in atScores, add it to atScores
+            if not any(cl.split("=")[0].strip() in score for score in atScores):
+                atScores.append(line)
                 
         #create landed title and manage holdings
         if cl.startswith(tuple(title_starts)):
@@ -238,10 +238,9 @@ def parse_landed_titles3(lines: list, landed_titles: dict, atScores: list, editO
                         if len(holdingStack) > 0:
                             #set currentHolding to last element in stack
                             currentHolding = holdingStack[-1]
-                            holdingDepth = indentation
                         else:
                             currentHolding = None
-                            holdingDepth = indentation
+                        holdingDepth = indentation
                     
                     
                     
@@ -258,6 +257,9 @@ def write_holding(h: LandedTitle, f):
         elif key in h.multiLineCheckList and len(h.dictonaryValues[key]) != 0:
             f.write("\n")
             for line in h.dictonaryValues[key]:
+                #replace "< =" with "<=" and "> =" with ">="
+                line = line.replace("< =", "<=")
+                line = line.replace("> =", ">=")
                 f.write(line)
             f.write("\n")
     #recursivly write each subholding
@@ -292,18 +294,66 @@ def write_landed_titles2(landed_titles: dict, atScores: list, output_path = "_Ou
                 with open(output_path+"01_" + currentLandedTitle + ".txt", "w", encoding="utf-8-sig") as f:
                     #write all the atScores 
                     for atScore in atScores:
-                        f.write(atScore+"\n")
+                        f.write(atScore)
                     write_holding(landed_titles[currentLandedTitle], f)
                     f.close()
     #write titularTitles to a file
     with open(output_path+"00_landed_titles.txt", "w", encoding="utf-8-sig") as f:
         #write all the atScores 
         for atScore in atScores:
-            f.write(atScore+"\n")
+            f.write(atScore)
         for currentLandedTitle in titularTitles:
             write_holding(currentLandedTitle, f)
         f.close()
-            
+
+def write_secondary_holding(h: LandedTitle, f):
+    f.write("\n")
+    f.write(h.dictonaryValues["nameLine"])
+    #write each holding dictionary value that is not None or lenght = 0
+    for key in h.dictonaryValues:
+        #skip province
+        if key == "province":
+            continue
+        #if key is in singleLineCheckList and not None
+        if key in h.singleLineCheckList and h.dictonaryValues[key] != None:
+            f.write(h.dictonaryValues[key])
+        #if key is in multiLineCheckList and not empty
+        elif key in h.multiLineCheckList and len(h.dictonaryValues[key]) != 0:
+            f.write("\n")
+            for line in h.dictonaryValues[key]:
+                f.write(line)
+            f.write("\n")
+    #recursivly write each subholding
+    #for holding in h.holdings:
+    #    write_holding(holding, f)
+    #find the whitespace infornt of h.dictonaryValues["nameLine"] for properly placing ending }
+    whitespace = ""
+    for char in h.dictonaryValues["nameLine"]:
+        if char == " ":
+            whitespace += " "
+        elif char == "\t":
+            whitespace += "\t"
+        else:
+            break
+    f.write(whitespace + "}\n")
+     
+def write_secondary_landed_titles2(landed_titles: dict, atScores: list, output_path = "_Output/secondary_landed_titles/"):
+   #if _Output folder does not exits create it
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+        
+    with open(output_path+"unused_landed_titles.txt", "w", encoding="utf-8-sig") as f:
+        #write all the atScores 
+        for atScore in atScores:
+            f.write(atScore)
+        for currentLandedTitle in landed_titles:
+            write_secondary_holding(landed_titles[currentLandedTitle], f)
+        f.close()
+    with open(output_path+"unused_landed_titles_list.txt", "w", encoding="utf-8-sig") as f:
+        for currentLandedTitle in landed_titles:
+            f.write(currentLandedTitle+"\n")
+        f.close()
+    
             
 #main
 def main():
@@ -311,6 +361,7 @@ def main():
     
     #dictionary landed_titles whoes key is a string and value is a landedTitle
     landed_titles = {}
+    
     atScores = []
     
     #file name restriciton list for preventing adding new holdings from those files
@@ -318,8 +369,20 @@ def main():
     
     for file in files:
         parse_landed_titles3(read_lines(file), landed_titles, atScores, any(name in file for name in file_name_restriction))
+    #other titles for getting a list of all titles in a secondary file path
+    #secondary_landed_titles = {}
+    #files_2 = read_files("_Input/secondary_landed_titles/")
+    #for file in files_2:
+    #    parse_landed_titles3(read_lines(file, "_Input/secondary_landed_titles/"), secondary_landed_titles, atScores, any(name in file for name in file_name_restriction))
+    #remove any landed_titles from secondary_landed_titles when their keys are the same
+    #for key in landed_titles:
+    #    if key in secondary_landed_titles:
+    #        secondary_landed_titles.pop(key)
+            
 
     write_landed_titles2(landed_titles, atScores)
+    #write_secondary_landed_titles2(secondary_landed_titles, atScores)
+
 
            
                 
